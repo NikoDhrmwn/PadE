@@ -48,10 +48,9 @@ class ScanActivity : AppCompatActivity() {
                 }
 
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    val intent = Intent()
+                    val intent = Intent(this@ScanActivity, DetailActivity::class.java)
                     intent.putExtra("picture", photoFile)
-                    setResult(DetailActivity.CAMERA_RESULT, intent)
-                    startActivity(Intent(this@ScanActivity, DetailActivity::class.java))
+                    startActivity(intent)
                     finish()
                 }
             }
