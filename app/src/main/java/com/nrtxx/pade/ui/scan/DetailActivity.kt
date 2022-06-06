@@ -13,17 +13,17 @@ import com.nrtxx.pade.helper.PenyakitResponse
 import com.nrtxx.pade.helper.rotateBitmap
 import com.nrtxx.pade.ml.PadeModel
 import org.tensorflow.lite.DataType
-import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 
 class DetailActivity : AppCompatActivity() {
     private lateinit var binding: ActivityDetailBinding
-    private val imageSize = 32
     companion object {
         private const val TAG = "DetailActivity"
 
@@ -38,7 +38,7 @@ class DetailActivity : AppCompatActivity() {
         var result = rotateBitmap(BitmapFactory.decodeFile(myPicture.path))
         binding.imgPreview.setImageBitmap(result)
 
-        result = Bitmap.createScaledBitmap(result, imageSize, imageSize, true)
+        result = Bitmap.createScaledBitmap(result, 32, 32, true)
 
         identifyImage(result)
 
@@ -89,8 +89,20 @@ class DetailActivity : AppCompatActivity() {
 
         // Creates inputs for reference.
         val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 32, 32, 3), DataType.FLOAT32)
-        val tBuffer = TensorImage.fromBitmap(image)
-        val byteBuffer = tBuffer.buffer
+        val byteBuffer = ByteBuffer.allocateDirect(4 * 32 * 32 * 3)
+        byteBuffer.order(ByteOrder.nativeOrder())
+
+        val intValues = intArrayOf(32 * 32)
+        image.getPixels(intValues, 0, image.width, 0, 0, image.width, image.height)
+        var pixel = 0
+        for (i in 0..32) {
+            for (j in 0..32) {
+                val value = intValues[pixel++]
+                byteBuffer.putFloat(((value shr 16) and 0xFF) * (1f / 255))
+                byteBuffer.putFloat(((value shr 32) and 0xFF) * (1f / 255))
+                byteBuffer.putFloat((value and 0xFF) * (1f / 255))
+            }
+        }
 
         inputFeature0.loadBuffer(byteBuffer)
 
@@ -98,25 +110,36 @@ class DetailActivity : AppCompatActivity() {
         val outputs = model.process(inputFeature0)
         val outputFeature0 = outputs.outputFeature0AsTensorBuffer
 
-        val max = getMax(outputFeature0.floatArray)
-
-        val resultIdentify = outputFeature0.floatArray[max].toString()
-        binding.tvNameDetail.text = resultIdentify
-        getDetail(resultIdentify)
-        // Releases model resources if no longer used.
-        model.close()
-    }
-
-    private fun getMax(arr: FloatArray): Int {
-        var ind = 0
-        var min = 0.0f
-
-        for (i in 0..1000) {
-            if(arr[i] > min) {
-                ind = i
-                min = arr[i]
+        val confidence = outputFeature0.floatArray
+        var maxPos = 0
+        var maxConfidence = 0.0f
+        for (i in 0..confidence.size) {
+            if (confidence[i] > maxConfidence) {
+                maxConfidence = confidence[i]
+                maxPos = i
             }
         }
-        return ind
+
+        val classes = arrayOf("Bacterial leaf blight", "Leaf smut", "Brown spot", "Healthy")
+        val resultIdentify = classes[maxPos]
+        binding.tvNameDetail.text = resultIdentify
+
+//        when (resultIdentify) {
+//            "Bacterial leaf blight" -> {
+//                getDetail("HD")
+//            }
+//            "Leaf smut" -> {
+//                getDetail("BD")
+//            }
+//            "Brown spot" -> {
+//                getDetail("BDC")
+//            }
+//            "Healthy" -> {
+//                getDetail("ST")
+//            }
+//        }
+
+        // Releases model resources if no longer used.
+        model.close()
     }
 }
