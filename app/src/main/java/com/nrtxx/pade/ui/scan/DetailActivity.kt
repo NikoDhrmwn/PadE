@@ -12,14 +12,11 @@ import com.nrtxx.pade.helper.Fields
 import com.nrtxx.pade.helper.PenyakitResponse
 import com.nrtxx.pade.helper.rotateBitmap
 import com.nrtxx.pade.ml.PadeModel
-import org.tensorflow.lite.DataType
-import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import org.tensorflow.lite.support.image.TensorImage
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 
 class DetailActivity : AppCompatActivity() {
@@ -45,7 +42,6 @@ class DetailActivity : AppCompatActivity() {
     }
 
     private fun getDetail(resultIdentify: String) {
-        showLoading(true)
         val client = ApiConfig.getApiService().getPenyakit(resultIdentify)
         client.enqueue(object : Callback<PenyakitResponse> {
             override fun onResponse(
@@ -84,60 +80,36 @@ class DetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun identifyImage(image: Bitmap) {
+    private fun identifyImage(bitmap: Bitmap) {
+        showLoading(true)
         val model = PadeModel.newInstance(this)
 
         // Creates inputs for reference.
-        val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 32, 32, 3), DataType.FLOAT32)
-        val byteBuffer = ByteBuffer.allocateDirect(4 * 32 * 32 * 3)
-        byteBuffer.order(ByteOrder.nativeOrder())
-
-        val intValues = intArrayOf(32 * 32)
-        image.getPixels(intValues, 0, image.width, 0, 0, image.width, image.height)
-        var pixel = 0
-        for (i in 0..32) {
-            for (j in 0..32) {
-                val value = intValues[pixel++]
-                byteBuffer.putFloat(((value shr 16) and 0xFF) * (1f / 255))
-                byteBuffer.putFloat(((value shr 32) and 0xFF) * (1f / 255))
-                byteBuffer.putFloat((value and 0xFF) * (1f / 255))
-            }
-        }
-
-        inputFeature0.loadBuffer(byteBuffer)
+        val newBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val tImage = TensorImage.fromBitmap(newBitmap)
 
         // Runs model inference and gets result.
-        val outputs = model.process(inputFeature0)
-        val outputFeature0 = outputs.outputFeature0AsTensorBuffer
+        val outputs = model.process(tImage)
+            .probabilityAsCategoryList.apply {
+                sortByDescending { it.score }
+            }
+        val probability = outputs[0]
+        binding.tvNameDetail.text = probability.label
 
-        val confidence = outputFeature0.floatArray
-        var maxPos = 0
-        var maxConfidence = 0.0f
-        for (i in 0..confidence.size) {
-            if (confidence[i] > maxConfidence) {
-                maxConfidence = confidence[i]
-                maxPos = i
+        when (probability.label) {
+            "Bacterial leaf blight" -> {
+                getDetail("HD")
+            }
+            "Leaf smut" -> {
+                getDetail("BD")
+            }
+            "Brown spot" -> {
+                getDetail("BDC")
+            }
+            "Healthy" -> {
+                getDetail("ST")
             }
         }
-
-        val classes = arrayOf("Bacterial leaf blight", "Leaf smut", "Brown spot", "Healthy")
-        val resultIdentify = classes[maxPos]
-        binding.tvNameDetail.text = resultIdentify
-
-//        when (resultIdentify) {
-//            "Bacterial leaf blight" -> {
-//                getDetail("HD")
-//            }
-//            "Leaf smut" -> {
-//                getDetail("BD")
-//            }
-//            "Brown spot" -> {
-//                getDetail("BDC")
-//            }
-//            "Healthy" -> {
-//                getDetail("ST")
-//            }
-//        }
 
         // Releases model resources if no longer used.
         model.close()
