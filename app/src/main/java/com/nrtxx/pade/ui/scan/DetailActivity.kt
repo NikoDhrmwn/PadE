@@ -64,7 +64,7 @@ class DetailActivity : AppCompatActivity() {
                 val responseBody = response.body()
                 if (response.isSuccessful && responseBody != null) {
                     if (resultIdentify == "ST") {
-                        setDetailSehat(responseBody.fields)
+                        setDetailSehat(responseBody.fields, image)
                     } else {
                         setDetail(responseBody.fields, image)
                     }
@@ -98,8 +98,22 @@ class DetailActivity : AppCompatActivity() {
         viewModel.insertHistory(history)
     }
 
-    private fun setDetailSehat(fields: Fields) {
+    private fun setDetailSehat(fields: Fields, image: Bitmap) {
         binding.tvNameDetail.text = fields.nama.stringValue
+        binding.tvGejalaDetail.text = null
+        binding.tvPenyebabDetail.text = null
+        binding.tvInfoDetail.text = null
+        binding.tvHADDetail.text = null
+        binding.tvHAVDetail.text = null
+
+        val viewModel = ViewModelProvider(this)[HistoryViewModel::class.java]
+        val history = History()
+        history.let {
+            it.penyakit = fields.nama.stringValue
+            it.date = getDate()
+            it.image = image
+        }
+        viewModel.insertHistory(history)
     }
 
     private fun showLoading(isLoading: Boolean) {
@@ -124,7 +138,6 @@ class DetailActivity : AppCompatActivity() {
                 sortByDescending { it.score }
             }
         val probability = outputs[0]
-        //binding.tvNameDetail.text = probability.label
 
         when (probability.label) {
             "Bacterial leaf blight" -> {

@@ -16,5 +16,10 @@
     <string name="disease_name">Nama Penyakit</string>
     <string name="description">Deskripsi</string>
     <string name="fab">Float Action Button</string>
+    <string name="suhu">20°C</string>
+    <string name="weather">Hujan</string>
+    <string name="date">Kamis, 20 Oktober</string>
+    <string name="kecepatan_angin">Kecepatan Angin 20 km/jam</string>
+    <string name="kelembaban">Kelembaban 89%</string>
 
 </resources>

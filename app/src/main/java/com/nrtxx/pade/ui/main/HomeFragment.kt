@@ -1,60 +1,124 @@
 package com.nrtxx.pade.ui.main
 
+import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Criteria
+import android.location.LocationManager
 import android.os.Bundle
+import android.text.format.DateFormat
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.getSystemService
 import com.nrtxx.pade.R
+import com.nrtxx.pade.api.ApiConfig
+import com.nrtxx.pade.databinding.FragmentHomeBinding
+import com.nrtxx.pade.helper.WeatherItem
+import com.nrtxx.pade.helper.WeatherResponse
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import java.util.*
 
-// TODO: Rename parameter arguments, choose names that match
-// the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-private const val ARG_PARAM1 = "param1"
-private const val ARG_PARAM2 = "param2"
-
-/**
- * A simple [Fragment] subclass.
- * Use the [HomeFragment.newInstance] factory method to
- * create an instance of this fragment.
- */
 class HomeFragment : Fragment() {
-    // TODO: Rename and change types of parameters
-    private var param1: String? = null
-    private var param2: String? = null
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        arguments?.let {
-            param1 = it.getString(ARG_PARAM1)
-            param2 = it.getString(ARG_PARAM2)
-        }
-    }
+    private lateinit var binding: FragmentHomeBinding
+    private var lat: Double? = null
+    private var lon: Double? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_home, container, false)
+    ): View {
+        binding = FragmentHomeBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
-    companion object {
-        /**
-         * Use this factory method to create a new instance of
-         * this fragment using the provided parameters.
-         *
-         * @param param1 Parameter 1.
-         * @param param2 Parameter 2.
-         * @return A new instance of fragment HomeFragment.
-         */
-        // TODO: Rename and change types and number of parameters
-        @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            HomeFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        val dateNow = Calendar.getInstance().time
+        val hariIni = DateFormat.format("EEE", dateNow) as String
+
+        getToday(hariIni)
+        getLatlon()
+    }
+
+    private fun getToday(hariIni: String) {
+        val date = Calendar.getInstance().time
+        val tanggal = DateFormat.format("d MMM yyyy", date) as String
+        val formatDate = "$hariIni, $tanggal"
+        binding.tvDate.text = formatDate
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getLatlon() {
+        val locationManager = activity?.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val criteria = Criteria()
+        val provider = locationManager.getBestProvider(criteria, true)
+        val location = locationManager.getLastKnownLocation(provider.toString())
+        if (location != null) {
+            lat = location.latitude
+            lon = location.longitude
+            getCurrentWeather()
+            setWeather()
+        } else {
+            //locationManager.requestLocationUpdates(provider, 20000, 0f, this)
+        }
+    }
+
+    private fun getCurrentWeather() {
+        val client = ApiConfig.getApiServiceCuaca().getWeather(lat, lon, "f7a716c616d63ead152a0f4d621d6e6c")
+        client.enqueue(object : Callback<WeatherResponse> {
+            override fun onResponse(
+                call: Call<WeatherResponse>,
+                response: Response<WeatherResponse>
+            ) {
+                val responseBody = response.body()
+                if (response.isSuccessful && responseBody != null) {
+                    binding.tvTemperature.text = String.format(Locale.getDefault(), "%.0f°C", responseBody.main.temp)
+                    //binding.tvKecepatanAngin.text = resources.getString(R.string.kecepatan_angin, responseBody.wind.speed)
+                   // binding.tvKelembaban.text = resources.getString(R.string.kelembaban, responseBody.main.humidity)
+                } else {
+                    Log.e("HomeFragment", "onFailure: ${response.message()}")
                 }
             }
+
+            override fun onFailure(call: Call<WeatherResponse>, t: Throwable) {
+                Log.e("HomeFragment", "onFailure: ${t.message}")
+            }
+        })
     }
+
+    private fun setWeather() {
+        val client = ApiConfig.getApiServiceCuaca().getWeather2(lat, lon, "f7a716c616d63ead152a0f4d621d6e6c")
+        client.enqueue(object : Callback<WeatherItem> {
+            override fun onResponse(
+                call: Call<WeatherItem>,
+                response: Response<WeatherItem>
+            ) {
+                val responseBody = response.body()
+                if (response.isSuccessful && responseBody != null) {
+                    binding.tvWeather.text = responseBody.description
+                } else {
+                    Log.e("HomeFragment", "onFailure: ${response.message()}")
+                }
+            }
+
+            override fun onFailure(call: Call<WeatherItem>, t: Throwable) {
+                Log.e("HomeFragment", "onFailure: ${t.message}")
+            }
+        })
+    }
+
+//    private fun checkPermission(permission: String): Boolean {
+//        return ContextCompat.checkSelfPermission(
+//            this,
+//            permission
+//        ) == PackageManager.PERMISSION_GRANTED
+//    }
 }
