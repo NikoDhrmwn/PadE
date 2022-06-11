@@ -50,6 +50,7 @@ class ScanActivity : AppCompatActivity() {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                     val intent = Intent(this@ScanActivity, DetailActivity::class.java)
                     intent.putExtra("picture", photoFile)
+                    DetailActivity.fromCamera = true
                     startActivity(intent)
                     finish()
                 }

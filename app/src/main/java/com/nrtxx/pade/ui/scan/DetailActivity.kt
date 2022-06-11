@@ -6,12 +6,16 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import androidx.lifecycle.ViewModelProvider
 import com.nrtxx.pade.api.ApiConfig
 import com.nrtxx.pade.databinding.ActivityDetailBinding
+import com.nrtxx.pade.db.History
 import com.nrtxx.pade.helper.Fields
 import com.nrtxx.pade.helper.PenyakitResponse
+import com.nrtxx.pade.helper.getDate
 import com.nrtxx.pade.helper.rotateBitmap
 import com.nrtxx.pade.ml.PadeModel
+import com.nrtxx.pade.ui.history.HistoryViewModel
 import org.tensorflow.lite.support.image.TensorImage
 import retrofit2.Call
 import retrofit2.Callback
@@ -23,6 +27,8 @@ class DetailActivity : AppCompatActivity() {
     private lateinit var binding: ActivityDetailBinding
     companion object {
         private const val TAG = "DetailActivity"
+        var fromCamera = false
+        var fromGallery = false
 
     }
 
@@ -31,17 +37,23 @@ class DetailActivity : AppCompatActivity() {
         binding = ActivityDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val myPicture = intent.getSerializableExtra("picture") as File
-        var result = rotateBitmap(BitmapFactory.decodeFile(myPicture.path))
-        binding.imgPreview.setImageBitmap(result)
-
-        result = Bitmap.createScaledBitmap(result, 32, 32, true)
-
-        identifyImage(result)
+        if (fromCamera) {
+            val myPicture = intent.getSerializableExtra("picture") as File
+            var result = rotateBitmap(BitmapFactory.decodeFile(myPicture.path))
+            binding.imgPreview.setImageBitmap(result)
+            result = Bitmap.createScaledBitmap(result, 32, 32, true)
+            identifyImage(result)
+        } else if (fromGallery) {
+            val myFile = intent.getSerializableExtra("file") as File
+            var result = rotateBitmap(BitmapFactory.decodeFile(myFile.path))
+            binding.imgPreview.setImageBitmap(result)
+            result = Bitmap.createScaledBitmap(result, 32, 32, true)
+            identifyImage(result)
+        }
 
     }
 
-    private fun getDetail(resultIdentify: String) {
+    private fun getDetail(resultIdentify: String, image: Bitmap) {
         val client = ApiConfig.getApiService().getPenyakit(resultIdentify)
         client.enqueue(object : Callback<PenyakitResponse> {
             override fun onResponse(
@@ -51,7 +63,11 @@ class DetailActivity : AppCompatActivity() {
                 showLoading(false)
                 val responseBody = response.body()
                 if (response.isSuccessful && responseBody != null) {
-                    setDetail(responseBody.fields)
+                    if (resultIdentify == "ST") {
+                        setDetailSehat(responseBody.fields)
+                    } else {
+                        setDetail(responseBody.fields, image)
+                    }
                 } else {
                     Log.e(TAG, "onFailure: ${response.message()}")
                 }
@@ -64,12 +80,26 @@ class DetailActivity : AppCompatActivity() {
         })
     }
 
-    private fun setDetail(fields: Fields) {
+    private fun setDetail(fields: Fields, image: Bitmap) {
+        binding.tvNameDetail.text = fields.nama.stringValue
         binding.tvGejalaDetail.text = fields.gejala.stringValue
         binding.tvPenyebabDetail.text = fields.penyebab.stringValue
         binding.tvInfoDetail.text = fields.info.stringValue
         binding.tvHADDetail.text = fields.HAD.stringValue
         binding.tvHAVDetail.text = fields.HAV.stringValue
+
+        val viewModel = ViewModelProvider(this)[HistoryViewModel::class.java]
+        val history = History()
+        history.let {
+            it.penyakit = fields.nama.stringValue
+            it.date = getDate()
+            it.image = image
+        }
+        viewModel.insertHistory(history)
+    }
+
+    private fun setDetailSehat(fields: Fields) {
+        binding.tvNameDetail.text = fields.nama.stringValue
     }
 
     private fun showLoading(isLoading: Boolean) {
@@ -94,20 +124,20 @@ class DetailActivity : AppCompatActivity() {
                 sortByDescending { it.score }
             }
         val probability = outputs[0]
-        binding.tvNameDetail.text = probability.label
+        //binding.tvNameDetail.text = probability.label
 
         when (probability.label) {
             "Bacterial leaf blight" -> {
-                getDetail("HD")
+                getDetail("HD", bitmap)
             }
             "Leaf smut" -> {
-                getDetail("BD")
+                getDetail("BD", bitmap)
             }
             "Brown spot" -> {
-                getDetail("BDC")
+                getDetail("BDC", bitmap)
             }
             "Healthy" -> {
-                getDetail("ST")
+                getDetail("ST", bitmap)
             }
         }
 
